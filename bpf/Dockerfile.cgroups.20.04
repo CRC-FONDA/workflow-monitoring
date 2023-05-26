@@ -1,0 +1,29 @@
+#FROM debian
+FROM ubuntu:20.04
+WORKDIR /
+RUN apt update
+ENV DEBIAN_FRONTEND=noninteractive
+
+# to get the bcc code
+RUN apt install -y git
+# bcc dependencies
+RUN apt install -y kmod zip bison build-essential cmake flex git libedit-dev libllvm12 llvm-12-dev libclang-12-dev python zlib1g-dev libelf-dev libfl-dev python3-setuptools liblzma-dev arping netperf iperf
+
+RUN apt-get install -y linux-headers-$(uname -r)
+
+RUN git clone -b master --single-branch --depth 1 https://github.com/iovisor/bcc.git && \
+    cd bcc && \
+    mkdir build && \
+    cd build && \
+    cmake .. && \
+    make -j && \
+    make install && \
+    rm -rf /bcc
+
+WORKDIR /bpf
+
+#COPY fileaccess.py .
+#COPY testdir ./testdir
+COPY . .
+RUN chmod +x entrypoint-cgroup.sh
+ENTRYPOINT [ "./entrypoint-cgroup.sh" ]
