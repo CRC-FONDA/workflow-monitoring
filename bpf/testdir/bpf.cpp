@@ -272,138 +272,80 @@ struct save_t
 
 BPF_HASH(save, u64, struct save_t);
 
-// todo: remove redundancies in these open functions
-
-int kprobe__do_filp_open(struct pt_regs *ctx, int dfd, struct filename *pathname, const struct open_flags *op)
+// internal function handling most logic for open kprobes to reduce redundancy
+static void do_open(bool insert, struct file* fp)
 {
     if (!CheckToLog())
-        return 0;
+        return;
 
     u64 id = bpf_get_current_pid_tgid();
     struct save_t saved = {};
+    saved.fp = fp;
     PrepareMainEvent(&saved.event);
     saved.event.type = TYPE_OPEN;
-    save.insert(&id, &saved);
-    return 0;
+    if (insert)
+        save.insert(&id, &saved);
+    else
+        save.update(&id, &saved);
 }
 
-int kretprobe__do_filp_open(struct pt_regs *ctx)
+// internal function handling most logic for open kretprobes to reduce redundancy
+// if fp is NULL, the FP saved in open is used
+static void do_ret_open(struct pt_regs *ctx, s64 result, struct file* fp)
 {
     u64 id = bpf_get_current_pid_tgid();
     struct save_t* saved = save.lookup(&id);
 
     if (saved != NULL)
     {
-        saved->fp = (struct file*)PT_REGS_RC(ctx);
+        if (fp != NULL)
+            saved->fp = fp;
 
-        struct event_transmit_path_t path_data = {};
-        path_data.event_type = TYPE_OPEN;
-        path_data.uid = saved->event.handle_uid;
-
-        if (!IS_ERR_VALUE(saved->fp)) // no error opening the file
-        { // result implicit 0 (success) still
+        if (saved->fp && !IS_ERR_VALUE(saved->fp)) // no error opening the file / valid file struct pointer
             SetEventFileStuff(&saved->event, saved->fp); // will not be executed on error -> therefor won't save handle
-            OutputFilePaths(ctx, &path_data, saved->fp);
-        }
-        else // error
-        {
-            saved->event.result = PT_REGS_RC(ctx);
-            // todo: maybe save flags / filename from original call
-            OutputFilePaths(ctx, &path_data, NULL);
-        }
-
-        FinalizeAndSubmitMainEvent(ctx, &saved->event);
-        save.delete(&id);
-    }
-
-    return 0;
-}
-
-int kprobe__do_file_open_root(struct pt_regs *ctx, const struct path *root, const char *name, const struct open_flags *op)
-{
-    if (!CheckToLog())
-        return 0;
-
-    u64 id = bpf_get_current_pid_tgid();
-    struct save_t saved = {};
-    PrepareMainEvent(&saved.event);
-    saved.event.type = TYPE_OPEN;
-    save.insert(&id, &saved);
-    return 0;
-}
-
-int kretprobe__do_file_open_root(struct pt_regs *ctx)
-{
-    u64 id = bpf_get_current_pid_tgid();
-    struct save_t* saved = save.lookup(&id);
-
-    if (saved != NULL)
-    {
-        saved->fp = (struct file*)PT_REGS_RC(ctx);
-
-        struct event_transmit_path_t path_data = {};
-        path_data.event_type = TYPE_OPEN;
-        path_data.uid = saved->event.handle_uid;
-
-        if (!IS_ERR_VALUE(saved->fp)) // no error opening the file
-        { // result implicit 0 (success) still
-            SetEventFileStuff(&saved->event, saved->fp); // will not be executed on error -> therefor won't save handle
-            OutputFilePaths(ctx, &path_data, saved->fp);
-        }
-        else // error
-        {
-            saved->event.result = PT_REGS_RC(ctx);
-            // todo: maybe save flags / filename from original call
-            OutputFilePaths(ctx, &path_data, NULL);
-        }
-
-        FinalizeAndSubmitMainEvent(ctx, &saved->event);
-        save.delete(&id);
-    }
-
-    return 0;
-}
-
-int kprobe__vfs_open(struct pt_regs *ctx, const struct path *path, struct file *file)
-{
-    if (!CheckToLog())
-        return 0;
-
-    u64 id = bpf_get_current_pid_tgid();
-    struct save_t saved = {};
-    saved.path = path;
-    saved.fp = file;
-    PrepareMainEvent(&saved.event);
-    saved.event.type = TYPE_OPEN;
-    save.update(&id, &saved);
-    // we use update here since there might already be an entry if vfs_open is called through do_filp_open or do_file_open_root
-    // then we basically only log vfs_open and drop do_filp_open / do_file_open_root as that is not needed anymore
-    // because only one open log is needed and the other two functions are attached to catch any atomic_open case which on success skips vfs_open
-    return 0;
-}
-
-int kretprobe__vfs_open(struct pt_regs *ctx)
-{
-    u64 id = bpf_get_current_pid_tgid();
-    struct save_t* saved = save.lookup(&id);
-
-    if (saved != NULL)
-    {
-        saved->event.result = PT_REGS_RC(ctx);
-        struct event_transmit_path_t path_data = {};
-        path_data.event_type = TYPE_OPEN;
-
-        if (saved->event.result == 0) // no error opening the file
-            SetEventFileStuff(&saved->event, saved->fp); // will not be executed on error -> therefor won't save handle
-        else
+        else // error; todo: maybe save flags / filename from original call
             saved->fp = NULL;
 
+        struct event_transmit_path_t path_data = {};
+        path_data.event_type = TYPE_OPEN;
         path_data.uid = saved->event.handle_uid;
+
+        saved->event.result = result;
         OutputFilePaths(ctx, &path_data, saved->fp);
         FinalizeAndSubmitMainEvent(ctx, &saved->event);
         save.delete(&id);
     }
+}
 
+// used for do_filp_open, do_file_open_root
+// we need those to catch the cases that circumvent vfs_open
+// however, a pointer to the file structure is returned instead of being passed as an argument
+int open_without_file(struct pt_regs *ctx, int dfd, struct filename *pathname, const struct open_flags *op)
+{
+    do_open(true, NULL);
+    return 0;
+}
+
+int ret_open_returning_file(struct pt_regs *ctx)
+{
+    struct file* fp = (struct file*)PT_REGS_RC(ctx);
+    do_ret_open(ctx, IS_ERR_VALUE(fp) ? (s64)fp : 0, fp);
+    return 0;
+}
+
+// used for vfs_open and the filesystem specific open functions
+int open_with_file(struct pt_regs *ctx, void *unused, struct file *file)
+{
+    do_open(false, file);
+    return 0;
+    // we use update here since there might already be an entry if vfs_open is called through do_filp_open or do_file_open_root
+    // then we basically only log vfs_open and drop do_filp_open / do_file_open_root as that is not needed anymore
+    // because only one open log is needed and the other two functions are attached to catch any atomic_open case which on success skips vfs_open
+}
+
+int ret_open_without_file(struct pt_regs *ctx)
+{
+    do_ret_open(ctx, PT_REGS_RC(ctx), NULL);
     return 0;
 }
 
