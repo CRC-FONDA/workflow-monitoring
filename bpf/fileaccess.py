@@ -81,6 +81,7 @@ if args.compileonly:
 if args.filesystems is not None:
     fss = args.filesystems.split(',')
     for fs in fss:
+        print('Attaching to fs ' + fs + '...', file=sys.stderr)
         try:
             b.attach_kprobe(event=fs + '_open', fn_name='open_with_file')
             print(fs + '_open attached', file=sys.stderr)
@@ -93,6 +94,7 @@ if args.filesystems is not None:
         except Exception as error:
             pass
 else:
+    print('Attaching to all filesystems.', file=sys.stderr)
     b.attach_kprobe(event='vfs_open', fn_name='open_with_file')
     b.attach_kprobe(event='do_filp_open', fn_name='open_without_file')
     b.attach_kprobe(event='do_file_open_root', fn_name='open_without_file')
