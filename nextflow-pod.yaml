@@ -7,9 +7,18 @@ metadata:
 spec:
   nodeSelector:
     exp: ebpf  # Ensures the pod is scheduled on nodes with this label
+  securityContext:
+    runAsUser: 0  # Run containers in the Pod as root user
+  volumes:
+    - name: workflow-monitoring-volume
+      persistentVolumeClaim:
+        claimName: workflow-monitoring-data
   containers:
   - name: nextflow
     image: nextflow/nextflow
     command: ["sleep"]
     args: ["infinity"]  # Runs sleep indefinitely
+    volumeMounts:
+      - name: workflow-monitoring-volume
+        mountPath: "/workspace"
 
