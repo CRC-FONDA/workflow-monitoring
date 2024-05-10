@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nextflow-sleep-pod
+  labels:
+    app: nextflow-sleeper
+spec:
+  nodeSelector:
+    exp: ebpf  # Ensures the pod is scheduled on nodes with this label
+  containers:
+  - name: nextflow
+    image: nextflow/nextflow
+    command: ["sleep"]
+    args: ["infinity"]  # Runs sleep indefinitely
+
