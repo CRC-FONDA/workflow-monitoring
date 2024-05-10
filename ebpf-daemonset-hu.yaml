@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: bpf-file-monitor
+  namespace: joelwitzke
+  labels:
+    exp: ebpf
+spec:
+  selector:
+    matchLabels:
+      name: ebpf-monitoring
+  template:
+    metadata:
+      labels:
+        name: ebpf-monitoring
+    spec:
+      hostPID: true
+      nodeSelector:
+        exp: ebpf
+      containers:
+        - name: cgroup-monitor
+          image: srnbckr/cgroup-monitor:20.04
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "100Mi"
+            limits:
+              cpu: "100m"
+              memory: "500Mi"
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: tmp-results
+              mountPath: /results
+          args:
+            - "--perfbuf"
+            - "-O"
+            - "/results/cgroups.csv"
+
+        - name: bpf-monitor
+          image: srnbckr/bpf-monitor:20.04
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "100Mi"
+            limits:
+              cpu: "100m"
+              memory: "500Mi"
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: host-kernel
+              mountPath: /sys/kernel/debug
+            - name: tmp-results
+              mountPath: /results
+          args:
+            - "--perfbuf"
+            - "--nofilter"
+            - "-O"
+            - "/results/file-bpf.csv"
+
+      volumes:
+        - name: host-kernel
+          hostPath:
+            path: /sys/kernel/debug
+            type: DirectoryOrCreate
+        - name: tmp-results
+          hostPath:
+            path: /tmp/results
+            type: DirectoryOrCreate
