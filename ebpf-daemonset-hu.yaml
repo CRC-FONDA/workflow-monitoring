@@ -34,7 +34,6 @@ spec:
             - name: tmp-results
               mountPath: /results
           args:
-            - "--perfbuf"
             - "-O"
             - "/results/cgroups.csv"
 
@@ -56,10 +55,15 @@ spec:
             - name: tmp-results
               mountPath: /results
           args:
-            - "--perfbuf"
+            - "--evbufmain"
+            - "512"
+            - "--evbufpath"
+            - "512"
             - "--nofilter"
             - "-O"
             - "/results/file-bpf.csv"
+            - "-f"
+            - "ceph"
 
       volumes:
         - name: host-kernel
