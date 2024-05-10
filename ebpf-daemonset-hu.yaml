@@ -19,7 +19,7 @@ spec:
         exp: ebpf
       containers:
         - name: cgroup-monitor
-          image: srnbckr/cgroup-monitor:20.04
+          image: bountrisv/cgroups-monitor:22.04
           imagePullPolicy: Always
           resources:
             requests:
