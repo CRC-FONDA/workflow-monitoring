@@ -19,7 +19,7 @@ spec:
         exp: ebpf
       containers:
         - name: cgroup-monitor
-          image: bountrisv/cgroups-monitor:22.04
+          image: bountrisv/cgroups-monitor:latest
           imagePullPolicy: Always
           resources:
             requests:
@@ -38,7 +38,7 @@ spec:
             - "/results/cgroups.csv"
 
         - name: bpf-monitor
-          image: srnbckr/bpf-monitor:20.04
+          image: bountrisv/bpf-monitor:latest
           imagePullPolicy: Always
           resources:
             requests:
