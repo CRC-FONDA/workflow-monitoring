@@ -58,6 +58,8 @@ bpf_text = bpf_text.replace('FILTER_BY_PATH', '1' if args.path is not None and n
 
 bpf_text = bpf_text.replace('INCLUDE_CHILD_PROCESSES', '1' if args.includechildren else '0')
 bpf_text = bpf_text.replace('LOG_DELETES', '1' if args.operations.find('U') >= 0 else '0')
+bpf_text = bpf_text.replace('LOG_READS', '1' if args.operations.find('R') >= 0 else '0')
+bpf_text = bpf_text.replace('LOG_WRITES', '1' if args.operations.find('W') >= 0 else '0')
 
 if args.perfbuf:
     bpf_text = re.sub('BPF_RINGBUF_OUTPUT\(([^,]+)[^;]+', r'BPF_PERF_OUTPUT(\1)', bpf_text)
@@ -108,8 +110,13 @@ b.attach_kretprobe(event='do_file_open_root', fn_name='ret_open_returning_file')
 if args.operations.find('R') >= 0:
     b.attach_kretprobe(event='vfs_read', fn_name='retprobe__readwrites')
     b.attach_kprobe(event='vfs_read', fn_name='probe__vfs_read')
-    b.attach_kretprobe(event='do_iter_read', fn_name='retprobe__readwrites')
-    b.attach_kprobe(event='do_iter_read', fn_name='probe__do_iter_read')
+
+    try: # on newer kernels those functions don't exist and attaching will raise an exception; ignoring it is fine
+        b.attach_kretprobe(event='do_iter_read', fn_name='retprobe__readwrites')
+        b.attach_kprobe(event='do_iter_read', fn_name='probe__do_iter_read')
+    except:
+        pass
+
     try: # on older kernels those functions don't exist and attaching will raise an exception; ignoring it is fine
         b.attach_kretprobe(event='vfs_iocb_iter_read', fn_name='retprobe__readwrites')
         b.attach_kprobe(event='vfs_iocb_iter_read', fn_name='probe__vfs_iocb_iter_read')
@@ -119,11 +126,23 @@ if args.operations.find('R') >= 0:
 if args.operations.find('W') >= 0:
     b.attach_kretprobe(event='vfs_write', fn_name='retprobe__readwrites')
     b.attach_kprobe(event='vfs_write', fn_name='probe__vfs_write')
-    b.attach_kretprobe(event='do_iter_write', fn_name='retprobe__readwrites')
-    b.attach_kprobe(event='do_iter_write', fn_name='probe__do_iter_write')
+        
+    try: # on newer kernels those functions don't exist and attaching will raise an exception; ignoring it is fine
+        b.attach_kretprobe(event='do_iter_write', fn_name='retprobe__readwrites')
+        b.attach_kprobe(event='do_iter_write', fn_name='probe__do_iter_write')
+    except:
+        pass
+    
     try: # on older kernels those functions don't exist and attaching will raise an exception; ignoring it is fine
         b.attach_kretprobe(event='vfs_iocb_iter_write', fn_name='retprobe__readwrites')
         b.attach_kprobe(event='vfs_iocb_iter_write', fn_name='probe__vfs_iocb_iter_write')
+    except:
+        pass
+
+if args.operations.find('R') >= 0 or args.operations.find('W') >= 0:
+    try: # on older kernels those functions don't exist and attaching will raise an exception; ignoring it is fine
+        b.attach_kretprobe(event='do_iter_readv_writev', fn_name='retprobe__readwrites')
+        b.attach_kprobe(event='do_iter_readv_writev', fn_name='probe__do_iter_readv_writev') # todo: make sure to filter reads / writes accordingly
     except:
         pass
 

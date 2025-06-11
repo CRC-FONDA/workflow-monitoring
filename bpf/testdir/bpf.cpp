@@ -17,6 +17,8 @@
 #define PATHFILTER_PATHES 3
 
 #define LOG_DELETES 1
+#define LOG_READS 1
+#define LOG_WRITES 1
 
 #define RB_PAGES_EVENT_MAIN 8
 #define RB_PAGES_EVENT_PATH 8
@@ -525,6 +527,14 @@ int probe__do_iter_write(struct pt_regs *ctx, struct file *file, struct iov_iter
 int probe__do_iter_read(struct pt_regs *ctx, struct file *file, struct iov_iter *iter, loff_t *pos, rwf_t flags)
 { // covers vfs_iter_read, vfs_readv
     return do_readwrite(file, iter->count, pos, TYPE_READ);
+}
+
+int probe__do_iter_readv_writev(struct pt_regs *ctx, struct file *file, struct iov_iter *iter, loff_t *pos, int type, rwf_t flags)
+{ // for kernel 6+ instead of do_iter_read / do_iter_write
+    if (LOG_READS && type == READ)
+        return do_readwrite(file, iter->count, pos, TYPE_READ);
+    else if (LOG_WRITES && type == WRITE)
+        return do_readwrite(file, iter->count, pos, TYPE_WRITE);
 }
 
 int probe__vfs_iocb_iter_write(struct pt_regs *ctx, struct file *file, struct kiocb *iocb, struct iov_iter *iter)
