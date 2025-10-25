@@ -745,6 +745,7 @@ def graph_bulkishness_by_task(physical = False):
                         continue
                     taskname = (t.name if physical else logical_name).split(':')[-1]
                     if not physical:
+                        #taskname = taskname if len(taskname) <= 5 else (taskname[:4] + '.') # for short names of tasks
                         taskname = taskname + ' x ' + str(len(tasks))
                     if accesses.analysis_reads.unique_bytes > 0:
                         bulkishness = Decimal(100) * Decimal(accesses.analysis_reads.last_access - accesses.analysis_reads.first_access) / Decimal(task_runtime)
