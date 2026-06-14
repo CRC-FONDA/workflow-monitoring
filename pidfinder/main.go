@@ -6,9 +6,8 @@ import (
 	"os"
 	"time"
 
-	containertypes "github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
 	"github.com/gocarina/gocsv"
+	"github.com/moby/moby/client"
 )
 
 type PodLabelsInfo struct {
@@ -83,7 +82,7 @@ func main() {
 
 	for {
 		newContainer := false
-		containers, err := cli.ContainerList(context.Background(), containertypes.ListOptions{
+		containers, err := cli.ContainerList(context.Background(), client.ContainerListOptions{
 			All: true,
 		})
 
@@ -92,12 +91,13 @@ func main() {
 			continue
 		}
 
-		for _, container := range containers {
-			containerJson, err := cli.ContainerInspect(context.Background(), container.ID)
+		for _, container := range containers.Items {
+			inspectResult, err := cli.ContainerInspect(context.Background(), container.ID, client.ContainerInspectOptions{})
 			if err != nil {
 				fmt.Println("Error inspecting container: ", err)
 				continue
 			}
+			containerJson := inspectResult.Container
 
 			// only store running containers
 			if !containerJson.State.Running {
