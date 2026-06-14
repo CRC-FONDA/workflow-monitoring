@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/docker/docker/api/types"
+	containertypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/gocarina/gocsv"
 )
@@ -83,7 +83,7 @@ func main() {
 
 	for {
 		newContainer := false
-		containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{
+		containers, err := cli.ContainerList(context.Background(), containertypes.ListOptions{
 			All: true,
 		})
 
